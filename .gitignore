@@ -1,0 +1,22 @@
+# Helm chart packages
+*.tgz
+.cr-release-packages/
+.cr-index/
+
+# Helm dependencies
+charts/*.tgz
+charts/*/charts
+
+# Temporary files
+*.swp
+*.swo
+*~
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Testing
+test-output/
