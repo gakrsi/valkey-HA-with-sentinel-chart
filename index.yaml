@@ -1,0 +1,15 @@
+apiVersion: v1
+entries:
+  valkey-sentinel-ha:
+  - apiVersion: v2
+    appVersion: "7.2"
+    created: "2026-03-24T08:40:24.767250069Z"
+    description: A Helm chart for deploying Valkey with Sentinel High Availability
+      on Kubernetes
+    digest: 2c220de035dbdf169b528e43c308b05e855da88fe976b0d47a28de27949bfb73
+    name: valkey-sentinel-ha
+    type: application
+    urls:
+    - https://github.com/gakrsi/valkey-HA-with-sentinel-chart/releases/download/valkey-sentinel-ha-0.1.0/valkey-sentinel-ha-0.1.0.tgz
+    version: 0.1.0
+generated: "2026-03-24T08:40:24.76726133Z"
