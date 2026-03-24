@@ -30,20 +30,39 @@ jobs:
         with:
           version: v3.14.0
 
-      - name: Run chart-releaser
-        uses: helm/chart-releaser-action@v1.6.0
+      - name: Install chart-releaser
+        run: |
+          VERSION="v1.6.1"
+          curl -sSLo cr.tar.gz "https://github.com/helm/chart-releaser/releases/download/${VERSION}/chart-releaser_${VERSION#v}_linux_amd64.tar.gz"
+          tar -xzf cr.tar.gz
+          sudo mv cr /usr/local/bin/cr
+          rm -f cr.tar.gz
+
+      - name: Package Helm Chart
+        run: |
+          mkdir -p .cr-release-packages
+          helm package . -d .cr-release-packages
+
+      - name: Upload Chart to GitHub Release
         env:
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
-        with:
-          charts_dir: .
-          skip_packaging: false
-          mark_as_latest: true
+        run: |
+          cr upload \
+            --owner "${{ github.repository_owner }}" \
+            --git-repo "${{ github.event.repository.name }}" \
+            --package-path .cr-release-packages \
+            --token "$CR_TOKEN" \
+            --skip-existing
 
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
-        if: github.ref == 'refs/heads/main'
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: .cr-index
-          publish_branch: gh-pages
-          force_orphan: false
+      - name: Generate Helm Repository Index
+        env:
+          CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+        run: |
+          cr index \
+            --owner "${{ github.repository_owner }}" \
+            --git-repo "${{ github.event.repository.name }}" \
+            --charts-repo "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}" \
+            --index-path . \
+            --package-path .cr-release-packages \
+            --token "$CR_TOKEN" \
+            --push
