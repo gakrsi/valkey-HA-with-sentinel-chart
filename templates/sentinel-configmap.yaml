@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "valkey-sentinel-ha.fullname" . }}-sentinel-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "valkey-sentinel-ha.labels" . | nindent 4 }}
+    app.kubernetes.io/component: sentinel
+data:
+  sentinel.conf: |
+    port {{ .Values.sentinel.service.port }}
+    # Use simple hostname - Kubernetes DNS will resolve within the same namespace
+    sentinel resolve-hostnames yes
+    sentinel announce-hostnames yes
+    sentinel monitor {{ .Values.sentinel.masterName }} {{ include "valkey-sentinel-ha.fullname" . }}-0.{{ include "valkey-sentinel-ha.fullname" . }}-headless.{{ .Release.Namespace }} {{ .Values.valkey.service.port }} {{ .Values.sentinel.quorum }}
+    sentinel down-after-milliseconds {{ .Values.sentinel.masterName }} {{ .Values.sentinel.downAfterMilliseconds }}
+    sentinel failover-timeout {{ .Values.sentinel.masterName }} {{ .Values.sentinel.failoverTimeout }}
+    sentinel parallel-syncs {{ .Values.sentinel.masterName }} {{ .Values.sentinel.parallelSyncs }}
+    {{- if .Values.sentinel.extraConfig }}
+    {{- .Values.sentinel.extraConfig | nindent 4 }}
+    {{- end }}

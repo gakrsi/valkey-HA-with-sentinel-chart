@@ -1,0 +1,117 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "valkey-sentinel-ha.fullname" . }}-sentinel
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "valkey-sentinel-ha.labels" . | nindent 4 }}
+    app.kubernetes.io/component: sentinel
+spec:
+  replicas: {{ .Values.sentinel.replicas }}
+  selector:
+    matchLabels:
+      {{- include "valkey-sentinel-ha.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: sentinel
+  template:
+    metadata:
+      labels:
+        {{- include "valkey-sentinel-ha.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: sentinel
+      {{- with .Values.sentinel.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- if .Values.sentinel.podSecurityContext.enabled }}
+      securityContext:
+        seccompProfile:
+          type: {{ .Values.sentinel.podSecurityContext.seccompProfile }}
+      {{- end }}
+      containers:
+      - name: sentinel
+        image: "{{ .Values.sentinel.image.repository }}:{{ .Values.sentinel.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.sentinel.image.pullPolicy }}
+        {{- if .Values.auth.enabled }}
+        env:
+        - name: VALKEY_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "valkey-sentinel-ha.secretName" . }}
+              key: password
+        {{- end }}
+        command:
+        - sh
+        - -c
+        - |
+          {{- if .Values.auth.enabled }}
+          # Copy config to writable location and add auth
+          cp /etc/sentinel-config/sentinel.conf /tmp/sentinel.conf
+          echo "sentinel auth-pass {{ .Values.sentinel.masterName }} $VALKEY_PASSWORD" >> /tmp/sentinel.conf
+          valkey-sentinel /tmp/sentinel.conf
+          {{- else }}
+          valkey-sentinel /etc/sentinel-config/sentinel.conf
+          {{- end }}
+        ports:
+        - containerPort: {{ .Values.sentinel.service.port }}
+          name: sentinel
+          protocol: TCP
+        {{- if .Values.sentinel.containerSecurityContext.enabled }}
+        securityContext:
+          runAsNonRoot: {{ .Values.sentinel.containerSecurityContext.runAsNonRoot }}
+          runAsUser: {{ .Values.sentinel.containerSecurityContext.runAsUser }}
+          allowPrivilegeEscalation: {{ .Values.sentinel.containerSecurityContext.allowPrivilegeEscalation }}
+          capabilities:
+            drop:
+            {{- range .Values.sentinel.containerSecurityContext.capabilities.drop }}
+            - {{ . }}
+            {{- end }}
+        {{- end }}
+        volumeMounts:
+        - name: config
+          mountPath: /etc/sentinel-config
+        {{- if .Values.sentinel.resources }}
+        resources:
+          {{- toYaml .Values.sentinel.resources | nindent 10 }}
+        {{- end }}
+        {{- if .Values.sentinel.livenessProbe.enabled }}
+        livenessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - valkey-cli -p {{ .Values.sentinel.service.port }} ping
+          initialDelaySeconds: {{ .Values.sentinel.livenessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.sentinel.livenessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.sentinel.livenessProbe.timeoutSeconds }}
+          successThreshold: {{ .Values.sentinel.livenessProbe.successThreshold }}
+          failureThreshold: {{ .Values.sentinel.livenessProbe.failureThreshold }}
+        {{- end }}
+        {{- if .Values.sentinel.readinessProbe.enabled }}
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - valkey-cli -p {{ .Values.sentinel.service.port }} ping
+          initialDelaySeconds: {{ .Values.sentinel.readinessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.sentinel.readinessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.sentinel.readinessProbe.timeoutSeconds }}
+          successThreshold: {{ .Values.sentinel.readinessProbe.successThreshold }}
+          failureThreshold: {{ .Values.sentinel.readinessProbe.failureThreshold }}
+        {{- end }}
+      volumes:
+      - name: config
+        configMap:
+          name: {{ include "valkey-sentinel-ha.fullname" . }}-sentinel-config
+      {{- with .Values.sentinel.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.sentinel.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.sentinel.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

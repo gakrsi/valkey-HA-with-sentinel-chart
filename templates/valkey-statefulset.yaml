@@ -1,0 +1,158 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "valkey-sentinel-ha.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "valkey-sentinel-ha.labels" . | nindent 4 }}
+    app.kubernetes.io/component: valkey
+spec:
+  serviceName: {{ include "valkey-sentinel-ha.fullname" . }}-headless
+  replicas: {{ .Values.valkey.replicas }}
+  selector:
+    matchLabels:
+      {{- include "valkey-sentinel-ha.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: valkey
+  template:
+    metadata:
+      labels:
+        {{- include "valkey-sentinel-ha.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: valkey
+      {{- with .Values.valkey.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- if .Values.valkey.podSecurityContext.enabled }}
+      securityContext:
+        runAsNonRoot: {{ .Values.valkey.podSecurityContext.runAsNonRoot }}
+        runAsUser: {{ .Values.valkey.podSecurityContext.runAsUser }}
+        runAsGroup: {{ .Values.valkey.podSecurityContext.runAsGroup }}
+        fsGroup: {{ .Values.valkey.podSecurityContext.fsGroup }}
+        seccompProfile:
+          type: {{ .Values.valkey.podSecurityContext.seccompProfile }}
+      {{- end }}
+      containers:
+      - name: valkey
+        image: "{{ .Values.valkey.image.repository }}:{{ .Values.valkey.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.valkey.image.pullPolicy }}
+        {{- if .Values.auth.enabled }}
+        env:
+        - name: VALKEY_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "valkey-sentinel-ha.secretName" . }}
+              key: password
+        {{- end }}
+        command:
+        - sh
+        - -c
+        - |
+          {{- if .Values.auth.enabled }}
+          # Start with authentication enabled
+          if [ "$(hostname)" = "{{ include "valkey-sentinel-ha.fullname" . }}-0" ]; then
+            echo "Starting master with authentication"
+            valkey-server /etc/valkey/valkey.conf --requirepass "$VALKEY_PASSWORD"
+          else
+            echo "Starting replica with authentication"
+            valkey-server /etc/valkey/valkey.conf \
+              --replicaof {{ include "valkey-sentinel-ha.fullname" . }}-0.{{ include "valkey-sentinel-ha.fullname" . }}-headless.{{ .Release.Namespace }}.svc.cluster.local {{ .Values.valkey.service.port }} \
+              --requirepass "$VALKEY_PASSWORD" \
+              --masterauth "$VALKEY_PASSWORD"
+          fi
+          {{- else }}
+          # Start without authentication
+          if [ "$(hostname)" = "{{ include "valkey-sentinel-ha.fullname" . }}-0" ]; then
+            echo "Starting master"
+            valkey-server /etc/valkey/valkey.conf
+          else
+            echo "Starting replica"
+            valkey-server /etc/valkey/valkey.conf --replicaof {{ include "valkey-sentinel-ha.fullname" . }}-0.{{ include "valkey-sentinel-ha.fullname" . }}-headless.{{ .Release.Namespace }}.svc.cluster.local {{ .Values.valkey.service.port }}
+          fi
+          {{- end }}
+        ports:
+        - containerPort: {{ .Values.valkey.service.port }}
+          name: valkey
+          protocol: TCP
+        {{- if .Values.valkey.containerSecurityContext.enabled }}
+        securityContext:
+          allowPrivilegeEscalation: {{ .Values.valkey.containerSecurityContext.allowPrivilegeEscalation }}
+          capabilities:
+            drop:
+            {{- range .Values.valkey.containerSecurityContext.capabilities.drop }}
+            - {{ . }}
+            {{- end }}
+        {{- end }}
+        volumeMounts:
+        - name: config
+          mountPath: /etc/valkey
+        - name: data
+          mountPath: {{ .Values.valkey.config.dataDir }}
+        {{- if .Values.valkey.resources }}
+        resources:
+          {{- toYaml .Values.valkey.resources | nindent 10 }}
+        {{- end }}
+        {{- if .Values.valkey.livenessProbe.enabled }}
+        livenessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            {{- if .Values.auth.enabled }}
+            - valkey-cli -a "$VALKEY_PASSWORD" ping
+            {{- else }}
+            - valkey-cli ping
+            {{- end }}
+          initialDelaySeconds: {{ .Values.valkey.livenessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.valkey.livenessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.valkey.livenessProbe.timeoutSeconds }}
+          successThreshold: {{ .Values.valkey.livenessProbe.successThreshold }}
+          failureThreshold: {{ .Values.valkey.livenessProbe.failureThreshold }}
+        {{- end }}
+        {{- if .Values.valkey.readinessProbe.enabled }}
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            {{- if .Values.auth.enabled }}
+            - valkey-cli -a "$VALKEY_PASSWORD" ping
+            {{- else }}
+            - valkey-cli ping
+            {{- end }}
+          initialDelaySeconds: {{ .Values.valkey.readinessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.valkey.readinessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.valkey.readinessProbe.timeoutSeconds }}
+          successThreshold: {{ .Values.valkey.readinessProbe.successThreshold }}
+          failureThreshold: {{ .Values.valkey.readinessProbe.failureThreshold }}
+        {{- end }}
+      volumes:
+      - name: config
+        configMap:
+          name: {{ include "valkey-sentinel-ha.fullname" . }}-config
+      {{- with .Values.valkey.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.valkey.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.valkey.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes:
+      {{- range .Values.valkey.persistence.accessModes }}
+      - {{ . }}
+      {{- end }}
+      {{- if .Values.valkey.persistence.storageClass }}
+      storageClassName: {{ .Values.valkey.persistence.storageClass }}
+      {{- end }}
+      resources:
+        requests:
+          storage: {{ .Values.valkey.persistence.size }}

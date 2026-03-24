@@ -1,0 +1,244 @@
+# Default values for valkey-sentinel-ha.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# -- Override chart name
+nameOverride: ""
+# -- Override full release name
+fullnameOverride: ""
+
+# Authentication configuration
+auth:
+  # -- Enable password authentication
+  enabled: true
+  # -- Valkey password (leave empty to auto-generate a random password)
+  # If empty, a random 32-character password will be generated
+  password: ""
+  # -- Use existing secret for password (overrides auth.password)
+  # The secret must contain a key named 'password'
+  existingSecret: ""
+
+# Valkey configuration
+valkey:
+  # -- Number of Valkey replicas (including master)
+  replicas: 3
+
+  image:
+    # -- Valkey image repository
+    repository: valkey/valkey
+    # -- Valkey image tag (defaults to Chart appVersion)
+    tag: "7.2-alpine"
+    # -- Image pull policy
+    pullPolicy: IfNotPresent
+
+  # Valkey service configuration
+  service:
+    # -- Valkey service port
+    port: 6379
+
+  # Valkey configuration options
+  config:
+    # -- Enable append-only file persistence
+    appendonly: "yes"
+    # -- Disable protected mode for cluster communication
+    protectedMode: "no"
+    # -- Data directory path
+    dataDir: "/data"
+    # -- Extra Valkey configuration (as a multi-line string)
+    extraConfig: ""
+
+  # Persistence configuration
+  persistence:
+    # -- Enable persistent storage
+    enabled: true
+    # -- Storage class name (leave empty for default)
+    storageClass: ""
+    # -- Access modes for PVC
+    accessModes:
+      - ReadWriteOnce
+    # -- Size of persistent volume
+    size: 2Gi
+
+  # Pod security context
+  podSecurityContext:
+    # -- Enable pod security context
+    enabled: true
+    # -- Run as non-root user
+    runAsNonRoot: true
+    # -- User ID to run as
+    runAsUser: 1001
+    # -- Group ID to run as
+    runAsGroup: 1001
+    # -- FSGroup for volume permissions
+    fsGroup: 1001
+    # -- Seccomp profile type
+    seccompProfile: RuntimeDefault
+
+  # Container security context
+  containerSecurityContext:
+    # -- Enable container security context
+    enabled: true
+    # -- Prevent privilege escalation
+    allowPrivilegeEscalation: false
+    capabilities:
+      # -- Capabilities to drop
+      drop:
+        - ALL
+
+  # Resource limits and requests
+  resources: {}
+    # limits:
+    #   cpu: 500m
+    #   memory: 512Mi
+    # requests:
+    #   cpu: 250m
+    #   memory: 256Mi
+
+  # Liveness probe configuration
+  livenessProbe:
+    # -- Enable liveness probe
+    enabled: true
+    # -- Initial delay before probe starts
+    initialDelaySeconds: 30
+    # -- Probe frequency
+    periodSeconds: 10
+    # -- Probe timeout
+    timeoutSeconds: 5
+    # -- Success threshold
+    successThreshold: 1
+    # -- Failure threshold
+    failureThreshold: 3
+
+  # Readiness probe configuration
+  readinessProbe:
+    # -- Enable readiness probe
+    enabled: true
+    # -- Initial delay before probe starts
+    initialDelaySeconds: 10
+    # -- Probe frequency
+    periodSeconds: 5
+    # -- Probe timeout
+    timeoutSeconds: 3
+    # -- Success threshold
+    successThreshold: 1
+    # -- Failure threshold
+    failureThreshold: 3
+
+  # Pod annotations
+  podAnnotations: {}
+
+  # Node selector
+  nodeSelector: {}
+
+  # Tolerations
+  tolerations: []
+
+  # Affinity rules
+  affinity: {}
+
+# Sentinel configuration
+sentinel:
+  # -- Number of Sentinel replicas
+  replicas: 3
+
+  image:
+    # -- Sentinel image repository (uses same image as Valkey)
+    repository: valkey/valkey
+    # -- Sentinel image tag (defaults to Chart appVersion)
+    tag: "7.2-alpine"
+    # -- Image pull policy
+    pullPolicy: IfNotPresent
+
+  # Sentinel service configuration
+  service:
+    # -- Sentinel service type
+    type: ClusterIP
+    # -- Sentinel service port
+    port: 26379
+
+  # Sentinel monitoring configuration
+  # -- Name of the master to monitor
+  masterName: mymaster
+  # -- Minimum number of sentinels that need to agree about master being down
+  quorum: 2
+  # -- Time in milliseconds before declaring master as down
+  downAfterMilliseconds: 5000
+  # -- Failover timeout in milliseconds
+  failoverTimeout: 10000
+  # -- Number of replicas that can be reconfigured in parallel during sync
+  parallelSyncs: 1
+  # -- Extra Sentinel configuration (as a multi-line string)
+  extraConfig: ""
+
+  # Pod security context
+  podSecurityContext:
+    # -- Enable pod security context
+    enabled: true
+    # -- Seccomp profile type
+    seccompProfile: RuntimeDefault
+
+  # Container security context
+  containerSecurityContext:
+    # -- Enable container security context
+    enabled: true
+    # -- Run as non-root user
+    runAsNonRoot: true
+    # -- User ID to run as
+    runAsUser: 1001
+    # -- Prevent privilege escalation
+    allowPrivilegeEscalation: false
+    capabilities:
+      # -- Capabilities to drop
+      drop:
+        - ALL
+
+  # Resource limits and requests
+  resources: {}
+    # limits:
+    #   cpu: 200m
+    #   memory: 256Mi
+    # requests:
+    #   cpu: 100m
+    #   memory: 128Mi
+
+  # Liveness probe configuration
+  livenessProbe:
+    # -- Enable liveness probe
+    enabled: true
+    # -- Initial delay before probe starts
+    initialDelaySeconds: 30
+    # -- Probe frequency
+    periodSeconds: 10
+    # -- Probe timeout
+    timeoutSeconds: 5
+    # -- Success threshold
+    successThreshold: 1
+    # -- Failure threshold
+    failureThreshold: 3
+
+  # Readiness probe configuration
+  readinessProbe:
+    # -- Enable readiness probe
+    enabled: true
+    # -- Initial delay before probe starts
+    initialDelaySeconds: 10
+    # -- Probe frequency
+    periodSeconds: 5
+    # -- Probe timeout
+    timeoutSeconds: 3
+    # -- Success threshold
+    successThreshold: 1
+    # -- Failure threshold
+    failureThreshold: 3
+
+  # Pod annotations
+  podAnnotations: {}
+
+  # Node selector
+  nodeSelector: {}
+
+  # Tolerations
+  tolerations: []
+
+  # Affinity rules
+  affinity: {}

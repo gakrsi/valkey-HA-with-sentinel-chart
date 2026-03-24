@@ -1,0 +1,95 @@
+**********************************************************************
+***   Valkey Sentinel High Availability has been deployed!        ***
+**********************************************************************
+
+Valkey Cluster Information:
+  - Namespace: {{ .Release.Namespace }}
+  - Release Name: {{ .Release.Name }}
+  - Valkey Replicas: {{ .Values.valkey.replicas }}
+  - Sentinel Replicas: {{ .Values.sentinel.replicas }}
+  - Master Name: {{ .Values.sentinel.masterName }}
+{{- if .Values.auth.enabled }}
+  - Authentication: Enabled
+{{- else }}
+  - Authentication: Disabled
+{{- end }}
+
+{{- if .Values.auth.enabled }}
+1. Get your Valkey password:
+
+  {{- if .Values.auth.existingSecret }}
+  export VALKEY_PASSWORD=$(kubectl get secret --namespace {{ .Release.Namespace }} {{ .Values.auth.existingSecret }} -o jsonpath="{.data.password}" | base64 -d)
+  {{- else }}
+  export VALKEY_PASSWORD=$(kubectl get secret --namespace {{ .Release.Namespace }} {{ include "valkey-sentinel-ha.secretName" . }} -o jsonpath="{.data.password}" | base64 -d)
+  {{- end }}
+
+  echo "Password: $VALKEY_PASSWORD"
+
+2. Check the status of your Valkey pods:
+{{- else }}
+1. Check the status of your Valkey pods:
+{{- end }}
+
+  kubectl get pods -n {{ .Release.Namespace }} -l app.kubernetes.io/name={{ include "valkey-sentinel-ha.name" . }}
+
+{{- if .Values.auth.enabled }}
+3. Wait for all pods to be ready:
+
+  kubectl wait --for=condition=ready pod -l app.kubernetes.io/name={{ include "valkey-sentinel-ha.name" . }} -n {{ .Release.Namespace }} --timeout=300s
+
+4. Verify Sentinel is monitoring the master:
+{{- else }}
+2. Wait for all pods to be ready:
+
+  kubectl wait --for=condition=ready pod -l app.kubernetes.io/name={{ include "valkey-sentinel-ha.name" . }} -n {{ .Release.Namespace }} --timeout=300s
+
+3. Verify Sentinel is monitoring the master:
+{{- end }}
+
+  kubectl exec -it {{ include "valkey-sentinel-ha.fullname" . }}-0 -n {{ .Release.Namespace }} -- \
+    valkey-cli -h {{ include "valkey-sentinel-ha.fullname" . }}-sentinel -p {{ .Values.sentinel.service.port }} \
+    sentinel get-master-addr-by-name {{ .Values.sentinel.masterName }}
+
+  Expected output: The address of the current master (initially {{ include "valkey-sentinel-ha.fullname" . }}-0)
+
+{{- if .Values.auth.enabled }}
+5. Connect to Valkey via Sentinel from your application:
+
+  Service: {{ include "valkey-sentinel-ha.fullname" . }}-sentinel.{{ .Release.Namespace }}.svc.cluster.local
+  Port: {{ .Values.sentinel.service.port }}
+  Master Name: {{ .Values.sentinel.masterName }}
+  Password: Use the password retrieved in step 1
+
+6. Test failover (optional):
+{{- else }}
+4. Connect to Valkey via Sentinel from your application:
+
+  Service: {{ include "valkey-sentinel-ha.fullname" . }}-sentinel.{{ .Release.Namespace }}.svc.cluster.local
+  Port: {{ .Values.sentinel.service.port }}
+  Master Name: {{ .Values.sentinel.masterName }}
+
+5. Test failover (optional):
+{{- end }}
+
+  Delete the master pod to trigger automatic failover:
+
+  kubectl delete pod {{ include "valkey-sentinel-ha.fullname" . }}-0 -n {{ .Release.Namespace }}
+
+  Check the new master:
+
+  kubectl exec -it {{ include "valkey-sentinel-ha.fullname" . }}-1 -n {{ .Release.Namespace }} -- \
+    valkey-cli -h {{ include "valkey-sentinel-ha.fullname" . }}-sentinel -p {{ .Values.sentinel.service.port }} \
+    sentinel get-master-addr-by-name {{ .Values.sentinel.masterName }}
+
+{{- if .Values.auth.enabled }}
+7. Direct connection to a specific Valkey pod (for debugging):
+
+  kubectl exec -it {{ include "valkey-sentinel-ha.fullname" . }}-0 -n {{ .Release.Namespace }} -- \
+    valkey-cli -a "$VALKEY_PASSWORD"
+{{- else }}
+6. Direct connection to a specific Valkey pod (for debugging):
+
+  kubectl exec -it {{ include "valkey-sentinel-ha.fullname" . }}-0 -n {{ .Release.Namespace }} -- valkey-cli
+{{- end }}
+
+For more information, visit: https://valkey.io/

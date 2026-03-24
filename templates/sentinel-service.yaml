@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "valkey-sentinel-ha.fullname" . }}-sentinel
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "valkey-sentinel-ha.labels" . | nindent 4 }}
+    app.kubernetes.io/component: sentinel
+spec:
+  type: {{ .Values.sentinel.service.type }}
+  selector:
+    {{- include "valkey-sentinel-ha.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: sentinel
+  ports:
+  - port: {{ .Values.sentinel.service.port }}
+    targetPort: sentinel
+    protocol: TCP
+    name: sentinel
